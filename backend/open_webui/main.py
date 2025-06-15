@@ -83,6 +83,7 @@ from open_webui.routers import (
     tools,
     users,
     utils,
+    yq_answers,
 )
 
 from open_webui.routers.retrieval import (
@@ -94,7 +95,7 @@ from open_webui.routers.retrieval import (
 from open_webui.internal.db import Session, engine
 
 from open_webui.models.functions import Functions
-from open_webui.models.models import Models
+from open_webui.models.models import Models, ModelMeta, ModelParams, ModelForm
 from open_webui.models.users import UserModel, Users
 from open_webui.models.chats import Chats
 
@@ -1145,6 +1146,7 @@ app.include_router(
     evaluations.router, prefix="/api/v1/evaluations", tags=["evaluations"]
 )
 app.include_router(utils.router, prefix="/api/v1/utils", tags=["utils"])
+app.include_router(yq_answers.router, prefix="/api/v1/yq_answers", tags=["yq_answers"])
 
 
 try:
