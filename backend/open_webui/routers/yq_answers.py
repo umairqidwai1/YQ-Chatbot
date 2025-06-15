@@ -1,16 +1,15 @@
 import os
 import re
 import logging
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from openai import OpenAI
 from pinecone import Pinecone
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 from pinecone.openapi_support.exceptions import PineconeApiException
-from open_webui.utils.auth import get_verified_user
-from open_webui.models.users import UserModel
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +18,20 @@ logger = logging.getLogger(__name__)
 # Presidio setup
 analyzer = AnalyzerEngine()
 anonymizer = AnonymizerEngine()
+
+# Authentication setup
+API_KEY = os.getenv("YQ_CHAT_API_KEY")
+logger.info(f"API Key loaded from env: {'Present' if API_KEY else 'Not present'}")
+api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    # Handle Bearer token format
+    if api_key and api_key.startswith("Bearer "):
+        api_key = api_key[7:]  # Remove "Bearer " prefix
+    
+    if api_key == API_KEY:
+        return api_key
+    raise HTTPException(status_code=403, detail="Could not validate credentials")
 
 router = APIRouter()
 
@@ -138,16 +151,16 @@ def answer_query(messages: List[dict]) -> str:
         answer = f"{answer} {inline}\n{footnotes}"
 
     # Log the exchange
-    log_exchange(user_message, context, answer)
+    #log_exchange(user_message, context, answer)
 
     return answer
-
+'''
 def log_exchange(question: str, context: str, answer: str) -> None:
     """Append one row to chat_history.csv (no readback)."""
     import csv
     with open("chat_history.csv", "a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow([question, context, answer])
-
+'''
 def format_citations(urls: list[str]) -> tuple[str, str]:
     if not urls:
         return "", ""
@@ -165,7 +178,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = 0.3
 
 @router.post("/chat/completions", tags=["OpenAI Compatibility"])
-async def chat_completion(request_data: ChatCompletionRequest):
+async def chat_completion(request_data: ChatCompletionRequest, api_key: str = Depends(get_api_key)):
     messages = [m.dict() for m in request_data.messages]
     try:
         answer = answer_query(messages)
@@ -210,7 +223,3 @@ async def get_models():
             },
         ]
     }
-
-@router.get("/")
-def read_root():
-    return {"message": "It works!"} 

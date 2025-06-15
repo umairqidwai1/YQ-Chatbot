@@ -22,6 +22,7 @@
 	import Source from './Source.svelte';
 	import { settings } from '$lib/stores';
 	import HtmlToken from './HTMLToken.svelte';
+	import YouTube from '$lib/components/icons/YouTube.svelte';
 
 	export let id: string;
 	export let tokens: Token[];
@@ -77,10 +78,102 @@
 		// Use FileSaver.js's saveAs function to save the generated CSV file.
 		saveAs(blob, `table-${id}-${tokenIdx}.csv`);
 	};
+
+	// Helper to extract all sources from tokens, including plain text [Title](URL) items
+	function extractAllSourcesFromTokens(tokens: any[]): { title: string; url: string }[] {
+		let sources: { title: string; url: string }[] = [];
+		let i = 0;
+		const linkRegex = /^\[([^\]]+)\]\(([^\)]+)\)$/;
+		while (i < tokens.length) {
+			const t = tokens[i];
+			if (
+				t.type === 'paragraph' &&
+				t.tokens &&
+				t.tokens.length === 1 &&
+				t.tokens[0].type === 'strong' &&
+				t.tokens[0].tokens &&
+				t.tokens[0].tokens.length === 1 &&
+				t.tokens[0].tokens[0].type === 'text' &&
+				t.tokens[0].tokens[0].text.trim().toLowerCase().startsWith('sources:')
+			) {
+				const listToken = tokens[i + 1];
+				if (listToken && listToken.type === 'list') {
+					for (const item of listToken.items) {
+						// Prefer markdown link token
+						const linkToken = (item.tokens || []).find((t) => t.type === 'link');
+						if (linkToken) {
+							sources.push({
+								title: linkToken.text,
+								url: linkToken.href
+							});
+						} else if (item.text) {
+							// Try to extract [Title](URL) from plain text
+							const match = item.text.match(linkRegex);
+							if (match) {
+								sources.push({
+									title: match[1],
+									url: match[2]
+								});
+							}
+						}
+					}
+					i += 2; // Skip the list as well
+					continue;
+				}
+			}
+			i++;
+		}
+		return sources;
+	}
+
+	// Remove all sources sections from tokens
+	function filterOutAllSourcesSections(tokens: any[]): any[] {
+		let filtered = [];
+		let i = 0;
+		while (i < tokens.length) {
+			const t = tokens[i];
+			if (
+				t.type === 'paragraph' &&
+				t.tokens &&
+				t.tokens.length === 1 &&
+				t.tokens[0].type === 'strong' &&
+				t.tokens[0].tokens &&
+				t.tokens[0].tokens.length === 1 &&
+				t.tokens[0].tokens[0].type === 'text' &&
+				t.tokens[0].tokens[0].text.trim().toLowerCase().startsWith('sources:')
+			) {
+				// Skip this paragraph and the next list (if present)
+				if (tokens[i + 1] && tokens[i + 1].type === 'list') {
+					i += 2;
+					continue;
+				} else {
+					i++;
+					continue;
+				}
+			}
+			filtered.push(t);
+			i++;
+		}
+		return filtered;
+	}
+
+	// Temporary debug log to inspect tokens for the current message
+	console.log('MarkdownTokens.svelte tokens:', tokens);
+
+	// --- Custom: Extract all sources and filter tokens ---
+	$: extractedSources = extractAllSourcesFromTokens(tokens);
+	$: filteredTokens = extractedSources.length > 0 ? filterOutAllSourcesSections(tokens) : tokens;
+	// --- END Custom ---
+
+	// Helper to extract YouTube video ID from a URL
+	function getYouTubeId(url: string): string | null {
+		const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+		return match ? match[1] : null;
+	}
 </script>
 
 <!-- {JSON.stringify(tokens)} -->
-{#each tokens as token, tokenIdx (tokenIdx)}
+{#each filteredTokens as token, tokenIdx (tokenIdx)}
 	{#if token.type === 'hr'}
 		<hr class=" border-gray-100 dark:border-gray-850" />
 	{:else if token.type === 'heading'}
@@ -320,3 +413,97 @@
 		{console.log('Unknown token', token)}
 	{/if}
 {/each}
+
+<!-- Custom: Render extracted sources as citations at the end -->
+{#if extractedSources}
+	<style>
+		.citation-card {
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			background: #11131a;
+			color: #fff;
+			border-radius: 12px;
+			border: 1px solid #23272f;
+			box-shadow: 0 2px 8px 0 rgba(0,0,0,0.10);
+			padding: 0;
+			margin-right: 0.6rem;
+			margin-bottom: 0.6rem;
+			max-width: 180px;
+			min-width: 140px;
+			transition: box-shadow 0.2s, transform 0.2s, background 0.2s, color 0.2s;
+			text-decoration: none;
+			min-height: 1.7rem;
+			overflow: hidden;
+		}
+		.citation-card:hover {
+			box-shadow: 0 6px 18px 0 rgba(0,0,0,0.18);
+			transform: translateY(-3px) scale(1.03);
+			background: #181a20;
+			color: #fff;
+		}
+		.citation-thumb {
+			width: 100%;
+			height: 90px;
+			object-fit: cover;
+			border-top-left-radius: 12px;
+			border-top-right-radius: 12px;
+			display: block;
+			background: #000;
+			margin-top: 0;
+		}
+		.citation-content {
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			padding: 0.7rem 0.7rem 0.9rem 0.7rem;
+			gap: 0.4rem;
+		}
+		.citation-icon {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin-bottom: 0;
+			margin-right: 0.3rem;
+		}
+		.citation-title {
+			font-weight: 500;
+			font-size: 0.85em;
+			line-height: 1.2;
+			text-align: left;
+			margin-top: 0;
+			max-width: 100%;
+			max-height: 2.6em;
+			white-space: normal;
+			overflow: hidden;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			-webkit-box-orient: vertical;
+			color: #fff;
+		}
+	</style>
+	<div class="py-0.5 -mx-0.5 w-full flex gap-1 items-center flex-wrap mt-2">
+		<div class="flex font-medium flex-wrap">
+			{#each extractedSources as source, idx}
+				<a
+					href={source.url}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="citation-card"
+					title={source.title}
+				>
+					{#if getYouTubeId(source.url)}
+						<img class="citation-thumb" src={`https://img.youtube.com/vi/${getYouTubeId(source.url)}/hqdefault.jpg`} alt="YouTube thumbnail" />
+					{/if}
+					<div class="citation-content">
+						<div class="citation-icon">
+							<YouTube size={18} color="#ff0000" />
+						</div>
+						<div class="citation-title">{source.title.length > 48 ? `${source.title.slice(0, 45)}...` : source.title}</div>
+					</div>
+				</a>
+			{/each}
+		</div>
+	</div>
+{/if}
