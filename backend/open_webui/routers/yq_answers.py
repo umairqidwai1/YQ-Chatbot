@@ -1,5 +1,6 @@
 import os
 import re
+import csv
 import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Security
@@ -119,12 +120,21 @@ def answer_query(messages: List[dict]) -> str:
             sources.append(f"[{title}]({link}&t={start_sec})")
 
     system_prompt = """
-    You are an Islamic Assistant that uses Shaykh Dr. Yasir Qadhi's videos to answer questions.
+    You are an Islamic Assistant that answers questions based on the teachings of Shaykh Dr. Yasir Qadhi.
 
-    • The context is a collection of Shaykh Yasir Qadhi's video transcripts, just summarize the transcripts as a human readable answer.
-    • If context clearly does not answer the question, say "Allah And His Messenger know best (I couldn't find the answer in Shayk Yasir Qadhi's videos)"
-    • If the question is completely unrelated to Islam, reply with: "Sorry, I can only help with questions related to Islam."
-    • Be concise, respectful, and format in Markdown.
+    Guidelines:
+    • You will receive a user's question and a related context (transcripts from Shaykh Yasir Qadhi's videos).
+    • Summarize the relevant parts of the transcript into a clear, human-readable answer in Markdown format.
+    • If the context clearly does not contain any relevant information, respond only with:
+    "Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."
+    • Be concise, respectful, and accurate in your responses.
+    • You may respond to general messages such as greetings.
+    - If the user says "hi", "hello", or similar, greet them with:
+        "Assalamualaikum Warahmatullahi Wabaraktuh \n How are you doing today? What questions answer for you?"
+    - For Islamic greetings, respond with:
+        "Wailikum Assalam Warahmatullahi Wabarakatuh
+    • If asked who created you, respond with:
+    "That's not important — what truly matters is who created us all: Allah (SWT)."
     """
 
     # Compose messages to send to OpenAI
@@ -146,21 +156,43 @@ def answer_query(messages: List[dict]) -> str:
         logger.error(f"OpenAI text query error: {e}")
         return "Sorry, I couldn't process your request... (Backend Error - LLM)"
 
-    if sources:
+    # Check if we should include sources
+    should_include_sources = True
+    
+    # Check if the user query is a system prompt
+    if user_message.strip().startswith('### Task:'):
+        should_include_sources = False
+    
+    # Check if the answer contains any of the specific responses
+    answer_lower = answer.lower()
+    if any(phrase in answer_lower for phrase in [
+        'assalamualaikum',
+        'wailikum assalam',
+        'allah and his messenger know best',
+        'that\'s not important — what truly matters is who created us all'
+    ]):
+        should_include_sources = False
+
+    if sources and should_include_sources:
         inline, footnotes = format_citations(sources)
         answer = f"{answer} {inline}\n{footnotes}"
 
     # Log the exchange
-    #log_exchange(user_message, context, answer)
+    log_exchange(user_message, context, answer)
 
     return answer
-'''
+
 def log_exchange(question: str, context: str, answer: str) -> None:
-    """Append one row to chat_history.csv (no readback)."""
-    import csv
+    """Append one row to chat_history.csv with headers if file doesn't exist."""
+    
+    file_exists = os.path.isfile("chat_history.csv")
+    
     with open("chat_history.csv", "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow([question, context, answer])
-'''
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["Question", "Context", "Answer"])
+        writer.writerow([question, context, answer])
+
 def format_citations(urls: list[str]) -> tuple[str, str]:
     if not urls:
         return "", ""
