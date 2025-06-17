@@ -111,13 +111,25 @@ def answer_query(messages: List[dict]) -> str:
     # Build context from pinecone results
     context = "\n\n---\n\n".join([r.get("text", "") for r in pinecone_results])
     sources = []
+    # Dictionary to store earliest timestamp for each unique video
+    video_timestamps = {}
+    
     for r in pinecone_results:
         link = r.get("Link")
         text = r.get("text", "")
         if link:
             start_sec = extract_start_sec(text)
             title = r.get("Title", "Video Link")
-            sources.append(f"[{title}]({link}&t={start_sec})")
+            # If we haven't seen this video before or this timestamp is earlier
+            if link not in video_timestamps or start_sec < video_timestamps[link]["timestamp"]:
+                video_timestamps[link] = {
+                    "title": title,
+                    "timestamp": start_sec
+                }
+    
+    # Convert the deduplicated videos to source links
+    sources = [f"[{data['title']}]({link}&t={data['timestamp']})" 
+              for link, data in video_timestamps.items()]
 
     system_prompt = """
     You are an Islamic Assistant that answers questions based on the teachings of Shaykh Dr. Yasir Qadhi.
