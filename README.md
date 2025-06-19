@@ -292,7 +292,7 @@ Then build frontend:
 ```
 npm run build
 ```
-Use this command to allocate more ram memory for build:
+OR you can use this command to allocate more ram memory for build:
 ```
 NODE_OPTIONS="--max-old-space-size=3072" npm run build
 ```
