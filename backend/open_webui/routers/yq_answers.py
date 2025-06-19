@@ -39,7 +39,7 @@ router = APIRouter()
 # Initialize clients
 client = OpenAI(api_key=os.getenv("YQ_OPENAI_API_KEY"))
 pc = Pinecone(api_key=os.getenv("YQ_PINECONE_API_KEY"), environment="us-east-1")
-index = pc.Index("yq1-transcripts")
+index = pc.Index("yq-transcripts-all")
 
 # Function to detect PII in text
 def detect_pii_entities(text: str):
