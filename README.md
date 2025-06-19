@@ -301,3 +301,7 @@ Move static files that you just built into the backend folder:
 ```
 cp -r dist/* ../backend/static/
 ```
+Remove old dir if it exists:
+```
+rm -rf ../backend/static/*
+```
