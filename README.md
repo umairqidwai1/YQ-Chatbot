@@ -264,3 +264,36 @@ If you have any questions, suggestions, or need assistance, please open an issue
 ---
 
 Created by [Timothy Jaeryang Baek](https://github.com/tjbck) - Let's make Open WebUI even more amazing together! 💪
+
+
+##Upadate local copy steps:
+
+Add open-webui github as upstream if you have your own repo:
+```
+git remote add upstream https://github.com/open-webui/open-webui.git
+```
+
+Fetch updated code:
+```
+git fetch upstream
+```
+
+Merge update to your local branch:
+```
+git merge upstream/main
+```
+(CTRL + x to leave editor)
+
+Install npm again:
+```
+npm install
+```
+Then build frontend:
+```
+npm run build
+```
+
+Move static files that you just built into the backend folder:
+```
+cp -r dist/* ../backend/static/
+```
