@@ -302,6 +302,6 @@ rm -rf backend/static/
 ```
 Move static files that you just built into the backend folder:
 ```
-cp -r dist/* ../backend/static/
+cp -r build/* backend/static/
 ```
 
