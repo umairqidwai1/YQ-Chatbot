@@ -296,12 +296,12 @@ OR you can use this command to allocate more ram memory for build:
 ```
 NODE_OPTIONS="--max-old-space-size=3072" npm run build
 ```
-
+Remove old dir if it exists:
+```
+rm -rf backend/static/
+```
 Move static files that you just built into the backend folder:
 ```
 cp -r dist/* ../backend/static/
 ```
-Remove old dir if it exists:
-```
-rm -rf ../backend/static/*
-```
+
