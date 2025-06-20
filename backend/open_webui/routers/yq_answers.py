@@ -194,6 +194,8 @@ def answer_query(messages: List[dict]) -> str:
 
     return answer
 
+# Function to log the chat history to a CSV file
+'''
 def log_exchange(question: str, context: str, answer: str) -> None:
     """Append one row to chat_history.csv with headers if file doesn't exist."""
     
@@ -204,6 +206,7 @@ def log_exchange(question: str, context: str, answer: str) -> None:
         if not file_exists:
             writer.writerow(["Question", "Context", "Answer"])
         writer.writerow([question, context, answer])
+'''
 
 def format_citations(urls: list[str]) -> tuple[str, str]:
     if not urls:
