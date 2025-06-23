@@ -196,7 +196,7 @@ def answer_query(messages: List[dict]) -> str:
         answer = f"{answer} {inline}\n{footnotes}"
 
     # Log the exchange
-    log_exchange(user_message, context, answer)
+    #log_exchange(user_message, context, answer)
 
     return answer
 
