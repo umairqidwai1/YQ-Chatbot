@@ -12,8 +12,16 @@ from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 from pinecone.openapi_support.exceptions import PineconeApiException
 
+# Ensure log directory exists
+os.makedirs("logs", exist_ok=True)
+
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s:%(message)s",
+    filename="logs/app.log",  # Log file path/name
+    filemode="a"         # Append mode; use "w" to overwrite every time.
+)
 logger = logging.getLogger(__name__)
 
 # Presidio setup
@@ -83,7 +91,23 @@ def search_pinecone(embedding: List[float], top_k: int = 3) -> List[dict]:
             include_values=False,
             include_metadata=True
         )
-        return [match["metadata"] for match in results.get("matches", [])]
+        matches = results.get("matches", [])
+
+        # Log each score + text/title (preview only)
+        for match in matches:
+            metadata = match.get("metadata", {})
+            score = match.get("score", 0)
+            preview = metadata.get("Title") or metadata.get("text", "")[:80].replace("\n", " ")
+            logger.info(f"Pinecone Match Score: {score:.4f} | Context: {preview}")
+        
+        # Return metadata + score so we can use it downstream
+        return [
+            {
+                **match.get("metadata", {}),
+                "score": match.get("score", 0)
+            }
+            for match in matches
+        ]
     except PineconeApiException as e:
         logger.error(f"Pinecone query error: {e}")
         return []
@@ -196,12 +220,11 @@ def answer_query(messages: List[dict]) -> str:
         answer = f"{answer} {inline}\n{footnotes}"
 
     # Log the exchange
-    #log_exchange(user_message, context, answer)
+    log_exchange(user_message, context, answer)
 
     return answer
 
 # Function to log the chat history to a CSV file
-'''
 def log_exchange(question: str, context: str, answer: str) -> None:
     """Append one row to chat_history.csv with headers if file doesn't exist."""
     
@@ -212,7 +235,6 @@ def log_exchange(question: str, context: str, answer: str) -> None:
         if not file_exists:
             writer.writerow(["Question", "Context", "Answer"])
         writer.writerow([question, context, answer])
-'''
 
 def format_citations(urls: list[str]) -> tuple[str, str]:
     if not urls:
