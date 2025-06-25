@@ -16,12 +16,7 @@ from pinecone.openapi_support.exceptions import PineconeApiException
 os.makedirs("logs", exist_ok=True)
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s:%(message)s",
-    filename="logs/app.log",  # Log file path/name
-    filemode="a"         # Append mode; use "w" to overwrite every time.
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Presidio setup
@@ -82,7 +77,7 @@ def embed_query(query: str) -> List[float]:
         return None
 
 # Function to query Pinecone index
-def search_pinecone(embedding: List[float], top_k: int = 3) -> List[dict]:
+def search_pinecone(embedding: List[float], score_threshold: float = 0.55, top_k: int = 50) -> List[dict]:
     try:
         results = index.query(
             namespace="ns1",
@@ -93,21 +88,20 @@ def search_pinecone(embedding: List[float], top_k: int = 3) -> List[dict]:
         )
         matches = results.get("matches", [])
 
-        # Log each score + text/title (preview only)
+        # Filter by score threshold
+        filtered_matches = []
         for match in matches:
-            metadata = match.get("metadata", {})
             score = match.get("score", 0)
-            preview = metadata.get("Title") or metadata.get("text", "")[:80].replace("\n", " ")
-            logger.info(f"Pinecone Match Score: {score:.4f} | Context: {preview}")
-        
-        # Return metadata + score so we can use it downstream
-        return [
-            {
-                **match.get("metadata", {}),
-                "score": match.get("score", 0)
-            }
-            for match in matches
-        ]
+            if score >= score_threshold:
+                metadata = match.get("metadata", {})
+                metadata["score"] = score  # keep the score
+                filtered_matches.append(metadata)
+
+                # Log score + context
+                preview = metadata.get("Title") or metadata.get("text", "")[:80].replace("\n", " ")
+                logger.info(f"Filtered Match Score: {score:.4f} | Context: {preview}")
+
+        return filtered_matches
     except PineconeApiException as e:
         logger.error(f"Pinecone query error: {e}")
         return []
@@ -129,8 +123,6 @@ def answer_query(messages: List[dict]) -> str:
 
     # Query Pinecone
     pinecone_results = search_pinecone(embedding)
-    if not pinecone_results:
-        return "Sorry, I couldn't process your request... (Backend Error - Search Pinecone)"
 
     # Build context from pinecone results
     context = "\n\n---\n\n".join([r.get("text", "") for r in pinecone_results])
@@ -161,10 +153,11 @@ def answer_query(messages: List[dict]) -> str:
     Instructions:
     • You will receive a user's question and a related context (transcripts from Shaykh Yasir Qadhi's videos).
     • Your goal is to summarize relevant parts of the transcript into a clear, **short**, and **concise** answer in **Markdown** format.
-    • Always quote **directly** from the transcript when possible. Use quotation marks and cite it naturally (e.g., Shaykh Yasir Qadhi says, "...").
+    • Try your best to always quote **directly** from the transcript when possible. Use quotation marks and cite it naturally (e.g., Shaykh Yasir Qadhi says, "...").
     • Do **not** take quotes or topics out of context — only respond if the transcript clearly addresses the user's question.
     • If the context does **not** contain a relevant answer, respond only with:
-        **"Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."**
+        "Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."
+    • DO NOT include any sources in your answer, just the answer itself.
 
     Behavior Rules:
     • Be respectful, accurate, and to the point.
@@ -176,7 +169,7 @@ def answer_query(messages: List[dict]) -> str:
             "Wa alaikum assalam warahmatullahi wabarakatuh,
             How are you doing today? What questions do you have in mind?"
     • If asked "Who created you?", respond with:
-        **"That's not important — what truly matters is who created us all: Allah (SWT)."**
+        "That's not important — what truly matters is who created us all: Allah (SWT)."
     """
 
     # Compose messages to send to OpenAI
@@ -226,15 +219,29 @@ def answer_query(messages: List[dict]) -> str:
 
 # Function to log the chat history to a CSV file
 def log_exchange(question: str, context: str, answer: str) -> None:
-    """Append one row to chat_history.csv with headers if file doesn't exist."""
-    
-    file_exists = os.path.isfile("chat_history.csv")
-    
-    with open("chat_history.csv", "a", newline="", encoding="utf-8") as f:
+    filename = "chat_history.csv"
+    max_entries = 100
+
+    # Read existing rows (if any)
+    rows = []
+    if os.path.isfile(filename):
+        with open(filename, "r", encoding="utf-8") as f:
+            reader = list(csv.reader(f))
+            if reader:
+                rows = reader[1:]  # Skip header
+
+    # Append new row
+    rows.append([question, context, answer])
+
+    # Keep only the last max_entries
+    rows = rows[-max_entries:]
+
+    # Write header and rows back
+    with open(filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["Question", "Context", "Answer"])
-        writer.writerow([question, context, answer])
+        writer.writerow(["Question", "Context", "Answer"])
+        writer.writerows(rows)
+
 
 def format_citations(urls: list[str]) -> tuple[str, str]:
     if not urls:
