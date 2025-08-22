@@ -288,6 +288,11 @@ Install npm again:
 ```
 npm install
 ```
+or (if getting npm error)
+```
+npm install --legacy-peer-deps
+```
+
 Then build frontend:
 ```
 npm run build
