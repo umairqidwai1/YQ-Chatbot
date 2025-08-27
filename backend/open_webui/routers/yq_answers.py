@@ -12,6 +12,9 @@ from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 from pinecone.openapi_support.exceptions import PineconeApiException
 
+# Ensure log directory exists
+os.makedirs("logs", exist_ok=True)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -74,7 +77,7 @@ def embed_query(query: str) -> List[float]:
         return None
 
 # Function to query Pinecone index
-def search_pinecone(embedding: List[float], top_k: int = 3) -> List[dict]:
+def search_pinecone(embedding: List[float], score_threshold: float = 0, top_k: int = 4) -> List[dict]:
     try:
         results = index.query(
             namespace="ns1",
@@ -83,7 +86,22 @@ def search_pinecone(embedding: List[float], top_k: int = 3) -> List[dict]:
             include_values=False,
             include_metadata=True
         )
-        return [match["metadata"] for match in results.get("matches", [])]
+        matches = results.get("matches", [])
+
+        # Filter by score threshold
+        filtered_matches = []
+        for match in matches:
+            score = match.get("score", 0)
+            if score >= score_threshold:
+                metadata = match.get("metadata", {})
+                metadata["score"] = score  # keep the score
+                filtered_matches.append(metadata)
+
+                # Log score + context
+                preview = metadata.get("Title") or metadata.get("text", "")[:80].replace("\n", " ")
+                logger.info(f"Filtered Match Score: {score:.4f} | Context: {preview}")
+
+        return filtered_matches
     except PineconeApiException as e:
         logger.error(f"Pinecone query error: {e}")
         return []
@@ -105,8 +123,6 @@ def answer_query(messages: List[dict]) -> str:
 
     # Query Pinecone
     pinecone_results = search_pinecone(embedding)
-    if not pinecone_results:
-        return "Sorry, I couldn't process your request... (Backend Error - Search Pinecone)"
 
     # Build context from pinecone results
     context = "\n\n---\n\n".join([r.get("text", "") for r in pinecone_results])
@@ -134,19 +150,28 @@ def answer_query(messages: List[dict]) -> str:
     system_prompt = """
     You are an Islamic Assistant that answers questions based on the teachings of Shaykh Dr. Yasir Qadhi.
 
-    Guidelines:
+    Instructions:
     • You will receive a user's question and a related context (transcripts from Shaykh Yasir Qadhi's videos).
-    • Summarize the relevant parts of the transcript into a clear, human-readable answer in Markdown format.
-    • If the context clearly does not contain any relevant information, respond only with:
-    "Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."
-    • Be concise, respectful, and accurate in your responses.
+    • If you are not given any context, respond only with:
+        "Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."
+    • Your goal is to summarize relevant parts of the transcript into a clear, **short**, and **concise** answer in **Markdown** format.
+    • Try your best to always quote **directly** from the transcript when possible. Use quotation marks and cite it naturally (e.g., Shaykh Yasir Qadhi says, "...").
+    • Do **not** take quotes or topics out of context — only respond if the transcript clearly addresses the user's question.
+    • If the context does **not** contain a relevant answer, respond only with:
+        "Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."
+    • DO NOT include any sources in your answer, just the answer itself.
+
+    Behavior Rules:
+    • Be respectful, accurate, and to the point.
     • You may respond to general messages such as greetings.
-    - If the user says "hi", "hello", or similar, greet them with:
-        "Assalamualaikum Warahmatullahi Wabaraktuh \n How are you doing today? What questions answer for you?"
-    - For Islamic greetings, respond with:
-        "Wailikum Assalam Warahmatullahi Wabarakatuh
-    • If asked who created you, respond with:
-    "That's not important — what truly matters is who created us all: Allah (SWT)."
+        - If the user says anything similar to "hi", "hello", "yo", "hey", "wassup", or informal greetings, respond with:
+            "Assalamualaikum Warahmatullahi Wabarakatuh,
+            How are you doing today? What questions do you have in mind?"
+        - If the user greets with an Islamic greeting like "assalamualaikum", respond with:
+            "Wa alaikum assalam warahmatullahi wabarakatuh,
+            How are you doing today? What questions do you have in mind?"
+    • If asked "Who created you?", respond with:
+        "That's not important — what truly matters is who created us all: Allah (SWT)."
     """
 
     # Compose messages to send to OpenAI
@@ -195,18 +220,30 @@ def answer_query(messages: List[dict]) -> str:
     return answer
 
 # Function to log the chat history to a CSV file
-'''
 def log_exchange(question: str, context: str, answer: str) -> None:
-    """Append one row to chat_history.csv with headers if file doesn't exist."""
-    
-    file_exists = os.path.isfile("chat_history.csv")
-    
-    with open("chat_history.csv", "a", newline="", encoding="utf-8") as f:
+    filename = "chat_history.csv"
+    max_entries = 100
+
+    # Read existing rows (if any)
+    rows = []
+    if os.path.isfile(filename):
+        with open(filename, "r", encoding="utf-8") as f:
+            reader = list(csv.reader(f))
+            if reader:
+                rows = reader[1:]  # Skip header
+
+    # Append new row
+    rows.append([question, context, answer])
+
+    # Keep only the last max_entries
+    rows = rows[-max_entries:]
+
+    # Write header and rows back
+    with open(filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["Question", "Context", "Answer"])
-        writer.writerow([question, context, answer])
-'''
+        writer.writerow(["Question", "Context", "Answer"])
+        writer.writerows(rows)
+
 
 def format_citations(urls: list[str]) -> tuple[str, str]:
     if not urls:

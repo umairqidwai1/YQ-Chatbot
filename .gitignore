@@ -1,3 +1,5 @@
+x.py
+yarn.lock
 .DS_Store
 node_modules
 /build
@@ -12,7 +14,8 @@ vite.config.ts.timestamp-*
 __pycache__/
 *.py[cod]
 *$py.class
-
+.nvmrc
+CLAUDE.md
 # C extensions
 *.so
 
@@ -180,6 +183,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
+
+# Project logs
+chat_history.csv
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
