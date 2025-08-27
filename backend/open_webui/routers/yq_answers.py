@@ -77,7 +77,7 @@ def embed_query(query: str) -> List[float]:
         return None
 
 # Function to query Pinecone index
-def search_pinecone(embedding: List[float], score_threshold: float = 0.55, top_k: int = 50) -> List[dict]:
+def search_pinecone(embedding: List[float], score_threshold: float = 0, top_k: int = 4) -> List[dict]:
     try:
         results = index.query(
             namespace="ns1",
@@ -152,6 +152,8 @@ def answer_query(messages: List[dict]) -> str:
 
     Instructions:
     • You will receive a user's question and a related context (transcripts from Shaykh Yasir Qadhi's videos).
+    • If you are not given any context, respond only with:
+        "Allah and His Messenger know best (I couldn't find the answer in Shaykh Yasir Qadhi's videos)."
     • Your goal is to summarize relevant parts of the transcript into a clear, **short**, and **concise** answer in **Markdown** format.
     • Try your best to always quote **directly** from the transcript when possible. Use quotation marks and cite it naturally (e.g., Shaykh Yasir Qadhi says, "...").
     • Do **not** take quotes or topics out of context — only respond if the transcript clearly addresses the user's question.
