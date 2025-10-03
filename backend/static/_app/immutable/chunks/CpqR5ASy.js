@@ -1,0 +1,2 @@
+import{s as a,S as t,b as r,a as s}from"./BIhksE4-.js";import{_ as i}from"./BARhXYJ4.js";var _={parser:a,get db(){return new t(2)},renderer:r,styles:s,init:i(e=>{e.state||(e.state={}),e.state.arrowMarkerAbsolute=e.arrowMarkerAbsolute},"init")};export{_ as diagram};
+//# sourceMappingURL=CpqR5ASy.js.map
